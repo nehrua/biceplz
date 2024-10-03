@@ -21,24 +21,18 @@ resource subnet 'Microsoft.Network/virtualNetworks/subnets@2024-01-01' = {
     addressPrefix: addressPrefix
     addressPrefixes: addressPrefixes
     defaultOutboundAccess: defaultOutboundAccess
-    // natGateway: empty(natGatewayId) ? null : {
-    //   id: natGatewayId
-    // }
     ...(includeNsg ? {
       networkSecurityGroup: {
         id: networkSecurityGroupId
       }
     } : {})
-    // networkSecurityGroup: !empty(networkSecurityGroupId) ? {
-    //   id: networkSecurityGroupId
-    // } : null
     privateEndpointNetworkPolicies: 'string'
     privateLinkServiceNetworkPolicies: 'string'
     ...(includeRouteTable ? {
       routeTable: {
         id: routeTableId
       }
-    } : {})  
+    } : {})
   }
 }
 
