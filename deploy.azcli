@@ -1,0 +1,4 @@
+
+az deployment group create --name mylzdeployment --resource-group demo-rg --template-file hub-network.bicep --parameters location='eastus'
+
+az deployment sub create --name myMlzDeployment --location eastus --template-file lz.bicep
