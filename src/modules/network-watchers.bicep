@@ -9,3 +9,6 @@ resource networkWatchers 'Microsoft.Network/networkWatchers@2023-11-01' = {
   tags: tags
   properties: {}
 }
+
+output networkWatcherID string = networkWatchers.id
+output networkWatcherName string = networkWatchers.name

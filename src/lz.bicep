@@ -1,5 +1,10 @@
 targetScope = 'subscription'
 
+// SUBSCRIPTIONS
+param hubSubId string = 'ff22a377-a3cf-495d-b0c4-46c645a339eb'
+param avdSpokeSubId string = 'ff22a377-a3cf-495d-b0c4-46c645a339eb'
+param mgmtSpokeSubId string = 'ff22a377-a3cf-495d-b0c4-46c645a339eb'
+
 param deploymentNameSuffix string = utcNow()
 param hubNetworkName string = 'hub-vnet'
 param hubAddressPrefixes array = [
@@ -17,6 +22,7 @@ param avdAddressPrefixes array = [
 param gatewaySubnetPrefix string = '10.0.0.0/26'
 param firewallSubnetPrefix string = '10.0.0.64/26'
 param bastionSubnetPrefix string = '10.0.0.128/26'
+param natGatewayName string = 'hub-ngw'
 
 param managementSubnets array = [
   {
@@ -40,22 +46,40 @@ param avdSubnets array = [
   }
 ]
 
+
 var resourceGroups = [
   {
     name: 'network-rg'
-    location: 'usgovvirginia'
+    location: 'eastus'
     tags: {}
   }
   {
     name: 'security-rg'
-    location: 'usgovvirginia'
+    location: 'eastus'
     tags: {}
   }
 ]
 
 // DEPLOY RESOURCE GROUPS
-module rg 'modules/resource-groups.bicep' = {
-  name: 'deploy-resourceGroups-${deploymentNameSuffix}'
+module hubRgs 'modules/resource-groups.bicep' = {
+  scope: subscription(hubSubId)
+  name: 'deploy-hub-resourceGroups-${deploymentNameSuffix}'
+  params: {
+    resourceGroups: resourceGroups 
+  }
+}
+
+module avdRgs 'modules/resource-groups.bicep' = {
+  scope: subscription(avdSpokeSubId)
+  name: 'deploy-avd-resourceGroups-${deploymentNameSuffix}'
+  params: {
+    resourceGroups: resourceGroups 
+  }
+}
+
+module mgmtRgs 'modules/resource-groups.bicep' = {
+  scope: subscription(mgmtSpokeSubId)
+  name: 'deploy-mgmt-resourceGroups-${deploymentNameSuffix}'
   params: {
     resourceGroups: resourceGroups 
   }
@@ -63,7 +87,7 @@ module rg 'modules/resource-groups.bicep' = {
 
 // DEPLOY HUB NETWORK
 module hubNetwork 'modules/hub-network.bicep' = {
-  scope: resourceGroup(resourceGroups[0].name)
+  scope: resourceGroup(hubSubId, resourceGroups[0].name)
   name: 'deploy-hubVirtualNetwork-${deploymentNameSuffix}'
   params: {
     virtualNetworkName: hubNetworkName
@@ -71,15 +95,16 @@ module hubNetwork 'modules/hub-network.bicep' = {
     gatewaySubnetPrefix: gatewaySubnetPrefix
     firewallSubnetPrefix: firewallSubnetPrefix
     bastionSubnetPrefix: bastionSubnetPrefix
+    natGatewayName: natGatewayName
   }
   dependsOn: [
-    rg
+    hubRgs
   ]
 }
 
 // DEPLOY MANAGEMENT SPOKE
 module managementNetwork 'modules/spoke-networks.bicep' = {
-  scope: resourceGroup(resourceGroups[0].name)
+  scope: resourceGroup(mgmtSpokeSubId, resourceGroups[0].name)
   name: 'deploy-managementVirtualNetwork-${deploymentNameSuffix}'
   params: {
     virtualNetworkName: managementNetworkName
@@ -87,13 +112,13 @@ module managementNetwork 'modules/spoke-networks.bicep' = {
     subnets: managementSubnets
   }
   dependsOn: [
-    rg
+    mgmtRgs
   ]
 }
 
 // DEPLOY AVD SPOKE
 module avdNetwork 'modules/spoke-networks.bicep' = {
-  scope: resourceGroup(resourceGroups[0].name)
+  scope: resourceGroup(avdSpokeSubId, resourceGroups[0].name)
   name: 'deploy-avdVirtualNetwork-${deploymentNameSuffix}'
   params: {
     virtualNetworkName: avdNetworkName
@@ -101,14 +126,13 @@ module avdNetwork 'modules/spoke-networks.bicep' = {
     subnets: avdSubnets
   }
   dependsOn: [
-    rg
-    managementNetwork
+    avdRgs
   ]
 }
 
 // VNET PEERINGS
 module hubToMgmtPeering 'modules/virtual-network-peering.bicep' = {
-  scope: resourceGroup(resourceGroups[0].name)
+  scope: resourceGroup(hubSubId, resourceGroups[0].name)
   name: 'deploy-hubMgmtPeering-${deploymentNameSuffix}'
   params: {
     allowForwardedTrafic: true
@@ -121,7 +145,7 @@ module hubToMgmtPeering 'modules/virtual-network-peering.bicep' = {
 }
 
 module hubToAvdPeering 'modules/virtual-network-peering.bicep' = {
-  scope: resourceGroup(resourceGroups[0].name)
+  scope: resourceGroup(hubSubId, resourceGroups[0].name)
   name: 'deploy-hubAvdPeering-${deploymentNameSuffix}'
   params: {
     allowForwardedTrafic: true
@@ -134,35 +158,39 @@ module hubToAvdPeering 'modules/virtual-network-peering.bicep' = {
 }
 
 module mgmtToHubPeering 'modules/virtual-network-peering.bicep' = {
-  scope: resourceGroup(resourceGroups[0].name)
+  scope: resourceGroup(mgmtSpokeSubId, resourceGroups[0].name)
   name: 'deploy-mgmtHubPeering-${deploymentNameSuffix}'
   params: {
     allowForwardedTrafic: true
     allowGatewayTransit: false
     remoteVirtualNetworkResourceId: hubNetwork.outputs.id 
-    useRemoteGateways: false              // CHANGE TO TRUE AFTER GW DEPLOYMENT
+    useRemoteGateways: false
     virtualNetworkName: managementNetworkName
     virtualNetworkPeerName: 'mgmt2Hub-peer'
   }
 }
 
 module avdToHubPeering 'modules/virtual-network-peering.bicep' = {
-  scope: resourceGroup(resourceGroups[0].name)
+  scope: resourceGroup(avdSpokeSubId, resourceGroups[0].name)
   name: 'deploy-avdHubPeering-${deploymentNameSuffix}'
   params: {
     allowForwardedTrafic: true
     allowGatewayTransit: false
     remoteVirtualNetworkResourceId: hubNetwork.outputs.id 
-    useRemoteGateways: false              // CHANGE TO TRUE AFTER GW DEPLOYMENT
+    useRemoteGateways: false
     virtualNetworkName: avdNetworkName
     virtualNetworkPeerName: 'avd2Hub-peer'
   }
 }
 
-// ENABLE NETWORK WATCHERS
-module networkWatcher 'modules/network-watchers.bicep' = {
-  scope: resourceGroup(resourceGroups[0].name)
-  name: 'netwatch-nw'
-}
+
+// ENABLE NETWORK WATCHERS (don't deploy after first run)
+// module networkWatcher 'modules/network-watchers.bicep' = {
+//   scope: resourceGroup(resourceGroups[0].name)
+//   name: 'deploy-hubSub-netwatcher-${deploymentNameSuffix}'
+//   params: {
+//     name: 'netwatch-${hubSubId}-nw'
+//   }
+// }
 
 

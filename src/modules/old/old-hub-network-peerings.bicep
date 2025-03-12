@@ -14,6 +14,9 @@ module hubToSpokePeering 'virtual-network-peering.bicep' = {
     remoteVirtualNetworkResourceId: spokeVirtualNetworkResourceId
     virtualNetworkName: hubVirtualNetworkName
     virtualNetworkPeerName: 'to-${split(spokeVirtualNetworkResourceId, '/')[8]}'
+    allowForwardedTrafic: true
+    allowGatewayTransit: true
+    useRemoteGateways: false
   }
 }
 
