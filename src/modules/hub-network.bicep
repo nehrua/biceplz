@@ -9,9 +9,12 @@ param gatewaySubnetPrefix string = '10.0.0.0/26'
 param firewallSubnetPrefix string = '10.0.0.64/26'
 param bastionSubnetPrefix string = '10.0.0.128/26'
 param deployAzureFirewall bool = true
-param deployBastion bool = true
 param deployHub bool = true
+param deployBastion bool = true
 param bastionHostName string = 'hub-bast'
+param deployNatGateway bool = true
+param natGatewayName string = 'hub-ngw'
+param prefixLength int = 31
 
 var bastionNsgRules = [
   {
@@ -128,6 +131,9 @@ var subnets = union([
     name: 'AzureFirewallSubnet'
     properties: {
       addressPrefix: firewallSubnetPrefix
+      natGateway: {
+        id: natGateway.outputs.id
+      }
     }
   } 
 ] : [], deployBastion ? [
@@ -144,7 +150,7 @@ var subnets = union([
 
 // Deploy default NSG
 module defaultNsg 'network-security-group.bicep' = {
-  name: 'deploy-defaultNsg-${deploymentNameSuffix}'
+  name: 'deploy-defaultNsg-${virtualNetworkName}-${deploymentNameSuffix}'
   params: {
     name: '${virtualNetworkName}-default-nsg'
   }
@@ -179,6 +185,7 @@ module virtualNetwork 'virtual-network.bicep' = {
   }
 }
 
+// Azure Firewall must be in same resource group as virtual network
 module firewall 'firewall.bicep' = if (deployAzureFirewall) {
   name: 'deploy-firewall-${deploymentNameSuffix}'
   params: {
@@ -198,6 +205,15 @@ module bastion 'bastion-host.bicep' = if (deployBastion) {
   }
 }
 
+// Link to AzureFirewallSubnet manually
+module natGateway 'nat-gateway.bicep' = if (deployNatGateway) {
+  name: 'deploy-natGateway-${deploymentNameSuffix}'
+  params: {
+    name: natGatewayName
+    prefixLength: prefixLength
+  }
+}
+
 output firewallName string = deployAzureFirewall ? firewall.outputs.name : ''
 output firewallPrivateIPAddress string = deployAzureFirewall ? firewall.outputs.privateIpAddress : ''
 output firewallId string = deployAzureFirewall ? firewall.outputs.resourceId : ''
@@ -209,3 +225,4 @@ output azureFirewallSubnetId string = virtualNetwork.outputs.hubSubnets[1].id
 output bastionSubnetId string = virtualNetwork.outputs.hubSubnets[2].id
 output id string = virtualNetwork.outputs.hubId
 output routeTableId string = routeTable.outputs.id
+output natGatewayd string = natGateway.outputs.id
