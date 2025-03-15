@@ -17,7 +17,7 @@ module defaultNsg 'network-security-group.bicep' = {
 module routeTable 'route-table.bicep' = {
   name: 'deploy-${virtualNetworkName}-routetable-${deploymentNameSuffix}'
   params: {
-    name: '${virtualNetworkName}-rt'
+    name: '${virtualNetworkName}-quadz-rt'
   }
 }
 

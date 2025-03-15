@@ -22,7 +22,6 @@ resource routeTable 'Microsoft.Network/routeTables@2023-11-01' = {
       name: route.name
       properties: {
         addressPrefix: route.addressPrefix
-        hasBgpOverride: route.hasBgpOverride
         nextHopIpAddress: route.nextHopIpAddress
         nextHopType: route.nextHopType
       }

@@ -1,22 +1,23 @@
 
 param deploymentNameSuffix string = utcNow()
 param name string
-param pipName string = 'bastion-pip'
 param location string = resourceGroup().location
 param tags object = {}
+
 @allowed([
   'Basic'
   'Standard'
   'Premium'
 ])
 param sku string = 'Basic'
+
 param subnetId string
 param virtualNetworkId string
 
 module publicIp 'public-ip.bicep' = {
   name: 'deploy-bastionPip-${deploymentNameSuffix}'
   params: {
-    name: pipName
+    name: '${name}-pip'
     publicIpAllocationMethod: 'Static' 
     skuName: 'Standard'
   }
