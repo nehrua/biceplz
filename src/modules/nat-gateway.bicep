@@ -1,6 +1,6 @@
 
-param name string = 'hubNatGateway-ngw'
-param ipPrefixName string = 'natGateway-ipp' 
+param name string = 'hub-ngw'
+param ipPrefixName string = 'hub-ngw-ippre' 
 param prefixLength int = 31
 param publicIPAddressVersion string = 'IPv4'
 param location string = resourceGroup().location

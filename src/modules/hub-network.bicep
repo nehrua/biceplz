@@ -5,16 +5,18 @@ param addressSpacePrefixes array = [
   '10.0.0.0/16'
 ]
 param dnsServers array = []
-param gatewaySubnetPrefix string = '10.0.0.0/26'
-param firewallSubnetPrefix string = '10.0.0.64/26'
-param bastionSubnetPrefix string = '10.0.0.128/26'
+param gatewaySubnetPrefix string = '10.0.0.0/24'
+param firewallSubnetPrefix string = '10.1.0.0/24'
+param bastionSubnetPrefix string = '10.2.0.0/24'
 param deployAzureFirewall bool = true
+param firewallName string = 'hub-fw'
 param deployHub bool = true
 param deployBastion bool = true
 param bastionHostName string = 'hub-bast'
 param deployNatGateway bool = true
 param natGatewayName string = 'hub-ngw'
-param prefixLength int = 31
+param natGwIpPrefexName string = 'hub-ngw-ippre'
+param natGwPrefixLength int = 31
 
 var bastionNsgRules = [
   {
@@ -160,7 +162,7 @@ module defaultNsg 'network-security-group.bicep' = {
 module bastionNsg 'network-security-group.bicep' = if (deployBastion) {
   name: 'deploy-bastionNsg-${deploymentNameSuffix}'
   params: {
-    name: 'bastion-nsg'
+    name: 'bastion-va-nsg'
     rules: bastionNsgRules
   }
 }
@@ -169,10 +171,11 @@ module bastionNsg 'network-security-group.bicep' = if (deployBastion) {
 module routeTable 'route-table.bicep' = {
   name: 'deploy-${virtualNetworkName}-routetable-${deploymentNameSuffix}'
   params: {
-    name: '${virtualNetworkName}-rt'
+    name: '${virtualNetworkName}-quadz-rt'
   }
 }
 
+// Deploy hub network
 module virtualNetwork 'virtual-network.bicep' = {
   name: 'deploy-${virtualNetworkName}-${deploymentNameSuffix}'
   params: {
@@ -189,7 +192,7 @@ module virtualNetwork 'virtual-network.bicep' = {
 module firewall 'firewall.bicep' = if (deployAzureFirewall) {
   name: 'deploy-firewall-${deploymentNameSuffix}'
   params: {
-    name: 'hub-fw'
+    name: firewallName
     firewallSkuTier: 'Premium'
     azureFirewallSubnetId: virtualNetwork.outputs.hubSubnets[1].id
     firewallPolicySku: 'Premium'
@@ -210,7 +213,8 @@ module natGateway 'nat-gateway.bicep' = if (deployNatGateway) {
   name: 'deploy-natGateway-${deploymentNameSuffix}'
   params: {
     name: natGatewayName
-    prefixLength: prefixLength
+    ipPrefixName: natGwIpPrefexName
+    prefixLength: natGwPrefixLength
   }
 }
 

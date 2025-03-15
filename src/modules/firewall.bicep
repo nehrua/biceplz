@@ -112,7 +112,7 @@ param networkRuleCollections array = [
 module publicIp 'public-ip.bicep' = {
   name: 'deploy-fwPip-${deploymentNameSuffix}'
   params: {
-    name: 'fw-pip'
+    name: '${name}-pip'
     publicIpAllocationMethod: 'Static'
     skuName: 'Standard'
   }
@@ -143,7 +143,7 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
 }
 
 resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
-  name: '${name}-policy'
+  name: '${name}-afwp'
   location: location
   properties: {
     sku: {
