@@ -8,6 +8,8 @@ param dnsServers array = []
 param gatewaySubnetPrefix string = '10.0.0.0/24'
 param firewallSubnetPrefix string = '10.1.0.0/24'
 param bastionSubnetPrefix string = '10.2.0.0/24'
+param resolverInboundSubnetPrefix string = '10.3.0.0/28'
+param resolverOutboundSubnetPrefix string = '10.3.0.16/28'
 param deployAzureFirewall bool = true
 param firewallName string = 'hub-fw'
 param deployHub bool = true
@@ -17,6 +19,9 @@ param deployNatGateway bool = true
 param natGatewayName string = 'hub-ngw'
 param natGwIpPrefexName string = 'hub-ngw-ippre'
 param natGwPrefixLength int = 31
+param deployResolver bool = true
+param deployResolverInboundEndpoint bool = true
+param deployResolverOutboundEndpoint bool = true
 
 var bastionNsgRules = [
   {
@@ -122,33 +127,74 @@ var bastionNsgRules = [
 ]
 
 var subnets = union([
-  {
-    name: 'GatewaySubnet'
-    properties: {
-      addressPrefix: gatewaySubnetPrefix
-    }
-  }
-], deployAzureFirewall ? [
-  {
-    name: 'AzureFirewallSubnet'
-    properties: {
-      addressPrefix: firewallSubnetPrefix
-      natGateway: {
-        id: natGateway.outputs.id
+    {
+      name: 'GatewaySubnet'
+      properties: {
+        addressPrefix: gatewaySubnetPrefix
       }
     }
-  } 
-] : [], deployBastion ? [
-  {
-    name: 'AzureBastionSubnet'
-    properties: {
-      addressPrefix: bastionSubnetPrefix
-      networkSecurityGroup: {
-        id: bastionNsg.outputs.id
+  ], 
+  deployAzureFirewall ? [
+    {
+      name: 'AzureFirewallSubnet'
+      properties: {
+        addressPrefix: firewallSubnetPrefix
+        natGateway: {
+          id: natGateway.outputs.id
+        }
+      }
+    } 
+  ] : [], 
+  deployBastion ? [
+    {
+      name: 'AzureBastionSubnet'
+      properties: {
+        addressPrefix: bastionSubnetPrefix
+        networkSecurityGroup: {
+          id: bastionNsg.outputs.id
+        }
       }
     }
-  }
-] : [])
+  ] : [],
+  deployResolverInboundEndpoint ? [
+    {
+      name: 'resolver-inbound-snet'
+      properties: {
+        addressPrefix: resolverInboundSubnetPrefix
+        delegations: [
+          {
+            name: 'Microsoft.Network.dnsResolvers'
+            properties: {
+              serviceName: 'Microsoft.Network/dnsResolvers'
+            }
+          }
+        ]
+        networkSecurityGroup: {
+          id: defaultNsg.outputs.id
+        }
+      }
+    }
+  ] : [],
+  deployResolverOutboundEndpoint ? [
+    {
+      name: 'resolver-outbound-snet'
+      properties: {
+        addressPrefix: resolverOutboundSubnetPrefix
+        delegations: [
+          {
+            name: 'Microsoft.Network.dnsResolvers'
+            properties: {
+              serviceName: 'Microsoft.Network/dnsResolvers'
+            }
+          }
+        ]
+        networkSecurityGroup: {
+          id: defaultNsg.outputs.id
+        }
+      }
+    }
+  ] : []  
+)
 
 // Deploy default NSG
 module defaultNsg 'network-security-group.bicep' = {
@@ -218,6 +264,20 @@ module natGateway 'nat-gateway.bicep' = if (deployNatGateway) {
   }
 }
 
+module dnsresolver 'dns-resolvers.bicep' = if (deployResolver) {
+  name: 'deploy-resolver-${deploymentNameSuffix}'
+  params: {
+    resolverVnetId: virtualNetwork.outputs.hubId
+    inboundSubnetId: virtualNetwork.outputs.hubSubnets[3].id
+    outboundSubnetId: virtualNetwork.outputs.hubSubnets[4].id
+  }
+}
+
+output hubVnetId string = virtualNetwork.outputs.hubId
+output azureFirewallSubnetId string = virtualNetwork.outputs.hubSubnets[1].id
+output bastionSubnetId string = virtualNetwork.outputs.hubSubnets[2].id
+output resolverInboundEndpointSubnetId string = virtualNetwork.outputs.hubSubnets[3].id
+output resolverOutboundEndpointSubnetId string = virtualNetwork.outputs.hubSubnets[4].id
 output firewallName string = deployAzureFirewall ? firewall.outputs.name : ''
 output firewallPrivateIPAddress string = deployAzureFirewall ? firewall.outputs.privateIpAddress : ''
 output firewallId string = deployAzureFirewall ? firewall.outputs.resourceId : ''
@@ -225,8 +285,5 @@ output defaultNsgName string = defaultNsg.outputs.name
 output defaultNsgId string = defaultNsg.outputs.id
 output bastionNsgName string = bastionNsg.outputs.name
 output bastionNsgId string = bastionNsg.outputs.id
-output azureFirewallSubnetId string = virtualNetwork.outputs.hubSubnets[1].id
-output bastionSubnetId string = virtualNetwork.outputs.hubSubnets[2].id
-output id string = virtualNetwork.outputs.hubId
 output routeTableId string = routeTable.outputs.id
-output natGatewayd string = natGateway.outputs.id
+output natGatewayId string = natGateway.outputs.id
