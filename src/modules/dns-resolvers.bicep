@@ -1,40 +1,61 @@
 
-param resolverName string
-param location string = resourceGroup().location
-
-param inboundEndpointName string
-param inboundEndpointPrivateIp string
-param inboundEndpointSubnetId string
-
-param outboundEndpointName string
-param outboundEndpointSubnetId string
-
 param tags object = {}
-param virtualNetworkId string
 
+@description('name of the dns private resolver')
+param dnsResolverName string = 'hub-vnet-dnspr'
+param location string = resourceGroup().location
+param resolverVnetId string
 
-resource dnsResolver 'Microsoft.Network/dnsResolvers@2023-07-01-preview' = {
-  location: location
-  name: resolverName
-  properties: {
-      virtualNetwork: {
-      id: virtualNetworkId
-      }
+param inboundEndpointName string = 'resolver-in'
+param inboundSubnetId string
+
+param outboundEndpointName string = 'resolver-out'
+param outboundSubnetId string
+
+@description('name of the vnet link that links outbound endpoint with forwarding rule set')
+param resolvervnetlink string = 'resolver-hub-vnet-link'
+
+@description('name of the forwarding ruleset')
+param forwardingRulesetName string = 'resolver-forwardingRules'
+
+@description('name of the forwarding rule name')
+param forwardingRuleName string = 'contosocom-forwarder'
+
+@description('the target domain name for the forwarding ruleset')
+param DomainName string = 'contoso.com.'
+
+@description('the list of target DNS servers ip address and the port number for conditional forwarding')
+param targetDNS array = [
+  {
+    ipaddress: '10.0.0.4'
+    port: 53
   }
-  tags: tags
+  {
+    ipaddress: '10.0.0.5'
+    port: 53
+  }
+]
+
+
+resource resolver 'Microsoft.Network/dnsResolvers@2022-07-01' = {
+  name: dnsResolverName
+  location: location
+  properties: {
+    virtualNetwork: {
+      id: resolverVnetId
+    }
+  }
 }
 
-resource dnsInboundEndpoint 'Microsoft.Network/dnsResolvers/inboundEndpoints@2023-07-01-preview' = {
-  parent: dnsResolver
+resource inEndpoint 'Microsoft.Network/dnsResolvers/inboundEndpoints@2023-07-01-preview' = {
+  parent: resolver
   location: location
   name: inboundEndpointName
   properties: {
     ipConfigurations: [
       {
-        privateIpAddress: inboundEndpointPrivateIp
-        privateIpAllocationMethod: 'Static'
         subnet: {
-          id: inboundEndpointSubnetId
+          id: inboundSubnetId
         }
       }
     ]
@@ -42,15 +63,91 @@ resource dnsInboundEndpoint 'Microsoft.Network/dnsResolvers/inboundEndpoints@202
   tags: tags
 }
 
-resource dnsOutboundEndpoint 'Microsoft.Network/dnsResolvers/outboundEndpoints@2023-07-01-preview' = {
-  parent: dnsResolver
+resource outEndpoint 'Microsoft.Network/dnsResolvers/outboundEndpoints@2023-07-01-preview' = {
+  parent: resolver
   location: location
   name: outboundEndpointName
   properties: {
     subnet: {
-      id: outboundEndpointSubnetId
+      id: outboundSubnetId
     }
   }
   tags: tags
 }
 
+resource fwruleSet 'Microsoft.Network/dnsForwardingRulesets@2022-07-01' = {
+  name: forwardingRulesetName
+  location: location
+  properties: {
+    dnsResolverOutboundEndpoints: [
+      {
+        id: outEndpoint.id
+      }
+    ]
+  }
+}
+
+resource resolverLink 'Microsoft.Network/dnsForwardingRulesets/virtualNetworkLinks@2022-07-01' = {
+  parent: fwruleSet
+  name: resolvervnetlink
+  properties: {
+    virtualNetwork: {
+      id: resolverVnetId
+    }
+  }
+}
+
+resource fwRules 'Microsoft.Network/dnsForwardingRulesets/forwardingRules@2022-07-01' = {
+  parent: fwruleSet
+  name: forwardingRuleName
+  properties: {
+    domainName: DomainName
+    targetDnsServers: targetDNS
+  }
+}
+
+
+
+// resource resolverVnet 'Microsoft.Network/virtualNetworks@2022-01-01' = {
+//   name: resolverVNETName
+//   location: location
+//   properties: {
+//     addressSpace: {
+//       addressPrefixes: [
+//         resolverVNETAddressSpace
+//       ]
+//     }
+//     enableDdosProtection: false
+//     enableVmProtection: false
+//     subnets: [
+//       {
+//         name: inboundSubnet
+//         properties: {
+//           addressPrefix: inboundAddressPrefix
+//           delegations: [
+//             {
+//               name: 'Microsoft.Network.dnsResolvers'
+//               properties: {
+//                 serviceName: 'Microsoft.Network/dnsResolvers'
+//               }
+//             }
+//           ]
+//         }
+//       }
+//       {
+//         name: outboundSubnet
+//         properties: {
+//           addressPrefix: outboundAddressPrefix
+//           delegations: [
+//             {
+//               name: 'Microsoft.Network.dnsResolvers'
+//               properties: {
+//                 serviceName: 'Microsoft.Network/dnsResolvers'
+//               }
+//             }
+//           ]
+//         }
+//       }
+//     ]
+//   }
+// }

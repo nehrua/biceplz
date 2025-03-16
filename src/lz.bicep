@@ -1,13 +1,12 @@
 targetScope = 'subscription'
 
 param location string = 'eastus'
+param deploymentNameSuffix string = utcNow()
 
-// SUBSCRIPTIONS
+// Subscriptions
 param hubSubId string = 'ff22a377-a3cf-495d-b0c4-46c645a339eb'
 param avdSpokeSubId string = 'ff22a377-a3cf-495d-b0c4-46c645a339eb'
 param mgmtSpokeSubId string = 'ff22a377-a3cf-495d-b0c4-46c645a339eb'
-
-param deploymentNameSuffix string = utcNow()
 
 // HUB Network Params
 param hubNetworkName string = 'hub-vnet'
@@ -18,6 +17,10 @@ param hubAddressPrefixes array = [
 param gatewaySubnetPrefix string = '10.0.0.0/26'
 param firewallSubnetPrefix string = '10.0.0.64/26'
 param bastionSubnetPrefix string = '10.0.0.128/26'
+param inboundResolverSubnetPrefix string = '10.0.0.192/28'
+param outboundResolverSubnetPrefix string = '10.0.0.208/28'
+param deployInboundResolver bool = true
+param deployOutboundResolver bool = true
 param deployAzureFirewall bool = true
 param firewallName string = 'hub-fw'
 param deployHub bool = true
@@ -130,6 +133,10 @@ module hubNetwork 'modules/hub-network.bicep' = {
     deployNatGateway: deployNatGateway
     natGatewayName: natGatewayName
     natGwPrefixLength: natGwPrefixLength
+    deployResolverInboundEndpoint: deployInboundResolver
+    resolverInboundSubnetPrefix: inboundResolverSubnetPrefix
+    deployResolverOutboundEndpoint: deployOutboundResolver
+    resolverOutboundSubnetPrefix: outboundResolverSubnetPrefix
   }
   dependsOn: [
     hubRgs
@@ -197,7 +204,7 @@ module avdToHubPeering 'modules/virtual-network-peering.bicep' = {
   params: {
     allowForwardedTrafic: true
     allowGatewayTransit: false
-    remoteVirtualNetworkResourceId: hubNetwork.outputs.id 
+    remoteVirtualNetworkResourceId: hubNetwork.outputs.hubVnetId 
     useRemoteGateways: false
     virtualNetworkName: avdNetworkName
     virtualNetworkPeerName: 'avd2Hub-peer'
@@ -210,12 +217,14 @@ module mgmtToHubPeering 'modules/virtual-network-peering.bicep' = {
   params: {
     allowForwardedTrafic: true
     allowGatewayTransit: false
-    remoteVirtualNetworkResourceId: hubNetwork.outputs.id 
+    remoteVirtualNetworkResourceId: hubNetwork.outputs.hubVnetId 
     useRemoteGateways: false
     virtualNetworkName: managementNetworkName
     virtualNetworkPeerName: 'mgmt2Hub-peer'
   }
 }
+
+
 
 // // ENABLE NETWORK WATCHERS (don't deploy after first run)
 // module networkWatcher 'modules/network-watchers.bicep' = {
