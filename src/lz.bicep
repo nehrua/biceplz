@@ -30,6 +30,13 @@ param deployNatGateway bool = true
 param natGatewayName string = 'hub-ngw'
 param natGwPrefixLength int = 31
 
+// Azure FW Params
+param avdSubnetCidrs array = [
+  '10.1.0.0/20'
+  '10.1.16.0/23'
+  '10.1.18.0/23'
+]
+
 // Management Spoke Network Params
 param managementNetworkName string = 'mgmt-vnet'
 param managementAddressPrefixes array = [
@@ -137,6 +144,7 @@ module hubNetwork 'modules/hub-network.bicep' = {
     resolverInboundSubnetPrefix: inboundResolverSubnetPrefix
     deployResolverOutboundEndpoint: deployOutboundResolver
     resolverOutboundSubnetPrefix: outboundResolverSubnetPrefix
+    avdSubnetCidrs: avdSubnetCidrs
   }
   dependsOn: [
     hubRgs

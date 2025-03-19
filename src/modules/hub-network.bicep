@@ -23,6 +23,9 @@ param deployResolver bool = true
 param deployResolverInboundEndpoint bool = true
 param deployResolverOutboundEndpoint bool = true
 
+// Azure FW ruleset params
+param avdSubnetCidrs array
+
 var bastionNsgRules = [
   {
     name: 'AllowHttpsInBound'
@@ -242,6 +245,7 @@ module firewall 'firewall.bicep' = if (deployAzureFirewall) {
     firewallSkuTier: 'Premium'
     azureFirewallSubnetId: virtualNetwork.outputs.hubSubnets[1].id
     firewallPolicySku: 'Premium'
+    avdSubnetAddresses: avdSubnetCidrs
   }
 }
 
