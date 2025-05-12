@@ -1,6 +1,4 @@
 $urls = @(
-  "https://manage.microsoft.us",
-  "https://manage.microsoft.com"
 )
 
 foreach ($url in $urls) {

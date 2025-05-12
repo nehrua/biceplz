@@ -1,14 +1,15 @@
 
 param name string = 'quadzero-rt'
 param location string = resourceGroup().location
+param nextHopIpAddress string = '10.0.0.3'
 
 @description('Array of routes')
 param routesArray array = [
   {
-    name: 'route1'
+    name: 'defaultRoute'
     addressPrefix: '0.0.0.0/0'
     hasBgpOverride: false
-    nextHopIpAddress: '10.0.0.3'
+    nextHopIpAddress: nextHopIpAddress
     nextHopType: 'VirtualAppliance'
   }
 ]

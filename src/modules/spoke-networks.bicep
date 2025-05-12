@@ -4,6 +4,7 @@ param virtualNetworkName string
 param addressSpacePrefixes array
 param dnsServers array = []
 param subnets array = []
+param nextHopIpAddress string = '10.0.0.3'
 
 // Deploy default NSG
 module defaultNsg 'network-security-group.bicep' = {
@@ -18,6 +19,7 @@ module routeTable 'route-table.bicep' = {
   name: 'deploy-${virtualNetworkName}-routetable-${deploymentNameSuffix}'
   params: {
     name: '${virtualNetworkName}-quadz-rt'
+    nextHopIpAddress: nextHopIpAddress
   }
 }
 

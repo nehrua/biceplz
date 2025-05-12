@@ -106,48 +106,4 @@ resource fwRules 'Microsoft.Network/dnsForwardingRulesets/forwardingRules@2022-0
   }
 }
 
-
-
-// resource resolverVnet 'Microsoft.Network/virtualNetworks@2022-01-01' = {
-//   name: resolverVNETName
-//   location: location
-//   properties: {
-//     addressSpace: {
-//       addressPrefixes: [
-//         resolverVNETAddressSpace
-//       ]
-//     }
-//     enableDdosProtection: false
-//     enableVmProtection: false
-//     subnets: [
-//       {
-//         name: inboundSubnet
-//         properties: {
-//           addressPrefix: inboundAddressPrefix
-//           delegations: [
-//             {
-//               name: 'Microsoft.Network.dnsResolvers'
-//               properties: {
-//                 serviceName: 'Microsoft.Network/dnsResolvers'
-//               }
-//             }
-//           ]
-//         }
-//       }
-//       {
-//         name: outboundSubnet
-//         properties: {
-//           addressPrefix: outboundAddressPrefix
-//           delegations: [
-//             {
-//               name: 'Microsoft.Network.dnsResolvers'
-//               properties: {
-//                 serviceName: 'Microsoft.Network/dnsResolvers'
-//               }
-//             }
-//           ]
-//         }
-//       }
-//     ]
-//   }
-// }
+output inboundEndpointIp string = inEndpoint.properties.ipConfigurations[0].privateIpAddress

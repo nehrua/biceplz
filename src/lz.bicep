@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-param location string = 'eastus'
+param location string = 'eastus2'
 param deploymentNameSuffix string = utcNow()
 
 // Subscriptions
@@ -12,9 +12,13 @@ param mgmtSpokeSubId string = 'ff22a377-a3cf-495d-b0c4-46c645a339eb'
 param hubNetworkName string = 'hub-vnet'
 param hubAddressPrefixes array = [
   '10.0.0.0/24'
+  '2001:db8:abcd:0010::/60'
 ]
 
-param gatewaySubnetPrefix string = '10.0.0.0/26'
+param gatewaySubnetPrefixes array = [
+  '10.0.0.0/26'
+  '2001:db8:abcd:0010::/64'
+]
 param firewallSubnetPrefix string = '10.0.0.64/26'
 param bastionSubnetPrefix string = '10.0.0.128/26'
 param inboundResolverSubnetPrefix string = '10.0.0.192/28'
@@ -41,6 +45,7 @@ param avdSubnetCidrs array = [
 param managementNetworkName string = 'mgmt-vnet'
 param managementAddressPrefixes array = [
   '10.0.1.0/24'
+  '2001:db8:abcd:0020::/60'
 ]
 
 
@@ -48,27 +53,41 @@ param managementAddressPrefixes array = [
 param avdNetworkName string = 'avd-vnet'
 param avdAddressPrefixes array = [
   '10.1.0.0/16'
+  '2001:db8:abcd:0030::/60'
 ]
 
 param managementSubnets array = [
   {
     name: 'default-subnet'
-    addressPrefix: '10.0.1.0/24'
+    addressPrefixes: [
+      '10.0.1.0/24'
+      '2001:db8:abcd:0020::/64'
+    ]
   }
 ]
 
 param avdSubnets array = [
   {
     name: 'genuser-snet'
-    addressPrefix: '10.1.0.0/20'
+    addressPrefixes: [
+      '10.1.0.0/20'
+      '2001:db8:abcd:0030::/64'
+    ]
   }
   {
     name: 'devuser-snet'
-    addressPrefix: '10.1.16.0/23'
+    addressPrefixes: [
+     '10.1.16.0/23'
+     '2001:db8:abcd:0031::/64'
+    ]
   }
   {
     name: 'powuser-snet'
-    addressPrefix: '10.1.18.0/23'
+    addressPrefixes: [
+    '10.1.18.0/23'
+    '2001:db8:abcd:0032::/64'
+  ]
+    
   }
 ]
 
@@ -130,7 +149,7 @@ module hubNetwork 'modules/hub-network.bicep' = {
     deployHub:deployHub
     virtualNetworkName: hubNetworkName
     addressSpacePrefixes: hubAddressPrefixes
-    gatewaySubnetPrefix: gatewaySubnetPrefix
+    gatewaySubnetPrefixes: gatewaySubnetPrefixes
     deployAzureFirewall: deployAzureFirewall
     firewallName: firewallName
     firewallSubnetPrefix: firewallSubnetPrefix
@@ -159,6 +178,7 @@ module mgmtNetwork 'modules/spoke-networks.bicep' = {
     virtualNetworkName: managementNetworkName
     addressSpacePrefixes: managementAddressPrefixes
     subnets: managementSubnets
+    nextHopIpAddress: hubNetwork.outputs.firewallPrivateIPAddress
   }
   dependsOn: [
     avdRgs
@@ -173,6 +193,7 @@ module avdNetwork 'modules/spoke-networks.bicep' = {
     virtualNetworkName: avdNetworkName
     addressSpacePrefixes: avdAddressPrefixes
     subnets: avdSubnets
+    nextHopIpAddress: hubNetwork.outputs.firewallPrivateIPAddress
   }
   dependsOn: [
     avdRgs
@@ -231,8 +252,6 @@ module mgmtToHubPeering 'modules/virtual-network-peering.bicep' = {
     virtualNetworkPeerName: 'mgmt2Hub-peer'
   }
 }
-
-
 
 // // ENABLE NETWORK WATCHERS (don't deploy after first run)
 // module networkWatcher 'modules/network-watchers.bicep' = {

@@ -3,8 +3,7 @@ param deploymentNameSuffix string = utcNow()
 param name string
 param location string = resourceGroup().location
 param avdVirtualNetworkCidrs array
-param avdAdminPoolCidrs array
-param avdDevPoolCidrs array
+param dnsResolverInboundIp string
 
 @allowed([
   'Basic'
@@ -470,6 +469,9 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
       name: 'AZFW_VNet'
       tier: firewallSkuTier
     }
+    firewallPolicy: {
+      id: firewallPolicy.id
+    }
     ipConfigurations: [
       {
         name: 'configuration'
@@ -493,6 +495,12 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
     sku: {
       tier: firewallPolicySku
     }
+    dnsSettings: {
+      enableProxy: true
+      servers: [
+        dnsResolverInboundIp
+      ]
+    }
     threatIntelMode: 'Alert'
   }
 }
@@ -505,17 +513,16 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
     priority: 10000
     ruleCollections: [
       {
+        name: 'NetworkRules-AVD-Outbound'
+        priority: 10100
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
         action: {
           type: 'Allow'
         }
-        name: 'AVD-Baseline-Outbound'
-        priority: 10100
-        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
         rules: [
-          //NETWORK RULES
           {
             ruleType: 'NetworkRule'
-            name: 'Other Azure Services'    //https://learn.microsoft.com/en-us/azure/virtual-network/service-tags-overview
+            name: 'Azure and M365 Services'    //https://learn.microsoft.com/en-us/azure/virtual-network/service-tags-overview
             ipProtocols: [
               'TCP'
             ]
@@ -525,7 +532,6 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
               'AzureActiveDirectory'              // Entra
               'AzureAdvancedThreatProtection'     // Defender for Identity
               'AzureBackup'                       // Azure Backup
-              'AzureCloud'                        // Azure Datacenters
               'AzureFrontDoor.Frontend'           // Outbound access to FrontDoor public endpoint
               'AzureFrontDoor.Backend'            // **Inbound FrontDoor access to Frontdoor customer managed services
               'AzureFrontDoor.FirstParty'         // **Azure Intneral service access to a subset of FrontDoor services
@@ -533,9 +539,10 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
               'AzureKeyVault'                     // Azure KeyVault
               'AzureLoadBalancer'                 // Azure Load Balancer health probes and mgmt traffic
               'AzureMonitor'                      // Azure Monitor tagged traffic
-              'AzureResourceManager'              // Azure Portal and API access
               'AzurePlatformDNS'                  // Azure DNS
               'AzurePlatformIDMS'                 // Azure Instance Metadata Service
+              'AzurePlatformLKM'                  // Windows licensing or KMS
+              'AzureResourceManager'              // Azure Portal and API access
               'AzureSentinel'                     // Microsoft Sentinel
               'AzureSiteRecovery'                 // Azure Site Recovery (DR)
               'GuestAndHybridManagement'          // Azure Automation and Guest Configuration
@@ -555,7 +562,25 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
           }
           {
             ruleType: 'NetworkRule'
-            name: 'Other Azure Services'    //https://learn.microsoft.com/en-us/azure/virtual-network/service-tags-overview
+            name: 'AzureCloud'    //https://learn.microsoft.com/en-us/azure/virtual-network/service-tags-overview
+            ipProtocols: [
+              'TCP'
+              'UDP'
+            ]
+            sourceAddresses: avdVirtualNetworkCidrs
+            sourceIpGroups: []
+            destinationAddresses: [
+              'AzureCloud'                        // Azure Datacenters
+            ]
+            destinationIpGroups: []
+            destinationFqdns: []
+            destinationPorts: [
+              '443'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'KMS Platform Service'    //https://learn.microsoft.com/en-us/azure/virtual-network/service-tags-overview
             ipProtocols: [
               'TCP'
             ]
@@ -568,6 +593,24 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
             destinationFqdns: []
             destinationPorts: [
               '1688'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'Azure Infra Port 80 Services'    //https://learn.microsoft.com/en-us/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure-for-us-government
+            ipProtocols: [
+              'TCP'
+            ]
+            sourceAddresses: avdVirtualNetworkCidrs
+            sourceIpGroups: []
+            destinationAddresses: [
+              '168.254.169.254'                 //Azure Instance Metadata Service
+              '168.63.129.16'                   //Session host health monitoring
+            ]
+            destinationIpGroups: []
+            destinationFqdns: []
+            destinationPorts: [
+              '80'
             ]
           }
           {
@@ -610,6 +653,20 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
             ]
             destinationPorts: [
               '443'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'Time'
+            ipProtocols: [
+              'UDP'
+            ]
+            sourceAddresses: avdVirtualNetworkCidrs
+            destinationFqdns: [
+              'time.windows.com'
+            ]
+          destinationPorts: [
+              '123'
             ]
           }
           // {
@@ -791,7 +848,16 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
           //     '443'
           //   ]
           // }
-          // APPLICATION RULES
+        ]
+      }
+      {
+        name: 'ApplicationRules-AVD-Outbound'
+        priority: 10200
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        action: {
+          type: 'Allow'
+        }
+        rules: [
           {
             ruleType: 'ApplicationRule'
             name: 'M365/Azure Service FQDN Tags'    //https://learn.microsoft.com/en-us/azure/firewall/fqdn-tags
@@ -808,6 +874,35 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
               'AzureBackup'                           // Azure Backup services
               'WindowsVirtualDesktop'                 // AVD platform traffic
               'Office365'                             // O365 Commercial and Gov endpoints (https://learn.microsoft.com/en-us/azure/firewall/protect-office-365) 
+            ]
+            webCategories: []
+            targetFqdns: [
+              '*.events.data.microsoft.com'           // Telemetry Service
+              '*.sfx.ms'                              // OneDrive Updates
+              '*.azure-dns.com'                       // Azure DNS
+              '*.azure-dns.net'                       // Azure DNS
+              '*.dm.microsoft.us'                     // Defender for Endpoint
+            ]
+            targetUrls: []
+            terminateTLS: false
+            sourceAddresses: avdVirtualNetworkCidrs
+            destinationAddresses: []
+            sourceIpGroups: []
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Intune'    //https://learn.microsoft.com/en-us/azure/firewall/fqdn-tags
+            protocols: [
+              {
+                protocolType: 'Http'
+                port: 80
+              }
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            fqdnTags: [
               'MicrosoftIntune'                       // AVD Intune access
             ]
             webCategories: []
@@ -843,94 +938,160 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
               }
             ]
             targetFqdns: [
+              // M365 Common and Office Online
+              '*.apps.mil'
+              '*.office365.us'
+              '*.dod.online.office365.us'
+              '*.auth.microsoft.us'
+              '*.gov.us.microsoftonline.com'
+              'dod-graph.microsoft.us'
+              'graph.microsoftazure.us'
+              'login.microsoftonline.us'
+              '*.msauth.net'
+              '*.msauthimages.us'
+              '*.msftauth.net'
+              '*.msftauthimages.us'
+              'clientconfig.microsoftonline-p.net'
+              //'graph.windows.net'
+              'login-us.microsoftonline.com'
+              'login.microsoftonline-p.com'
+              //'login.microsoftonline.com'
+              'login.windows.net'
+              'loginex.microsoftonline.com'
+              'mscrl.microsoft.com'
+              'nexus.microsoftonline-p.com'
+              'secure.aadcdn.microsoftonline-p.com'
+              'reports.apps.mil'
+              'webshell.dodsuite.office365.us'
+              'www.ohome.apps.mil'
+              'dod.loki.office365.us'
+              'activation.sls.microsoft.com'
+              'crl.microsoft.com'
+              'go.microsoft.com'
+              'insertmedia.bing.office.net'
+              'ocsa.officeapps.live.com'
+              'ocsredir.officeapps.live.com'
+              'ocws.officeapps.live.com'
+              'office15client.microsoft.com'
+              'officecdn.microsoft.com'
+              'officecdn.microsoft.com.edgesuite.net'
+              'officepreviewredir.microsoft.com'
+              'officeredir.microsoft.com'
+              'ols.officeapps.live.com'
+              'r.office.microsoft.com'
+              'cdn.odc.officeapps.live.com'
+              'mrodevicemgr.officeapps.live.com'
+              'odc.officeapps.live.com'
+              'officeclient.microsoft.com'
+              'lpcres.delve.office.com'
+              '*.cdn.office.net'
+              '*.security.apps.mil'
+              'compliance.apps.mil'
+              'purview.apps.mil'
+              'scc.protection.apps.mil'
+              'security.apps.mil'
+              'activity.windows.com'
+              'dod.activity.windows.us'
+              'dod-mtis.cortana.ai'
+              '*.aadrm.us'
+              '*.informationprotection.azure.us'
+              'pf.events.data.microsoft.com'
+              'pf.pipe.aria.microsoft.com'
+
               // Exchange Online
-              //'outlook-dod.office365.us'
-              //'webmail.apps.mil'
-              'attachments-dod.office365-net.us'
+              '*.dod.office365.us'
+              '*attachments-dod.office365-net.us'
               'autodiscover-s-dod.office365.us'
               // 'autodiscover.<tenant>.mail.onmicrosoft.us'
               // 'autodiscover.<tenant>.onmicrosoft.us'
               '*.protection.apps.mil'
-              //'*.protection.office365.us'
+              '*.protection.office365.us'
+
               // SharePoint Online
               '*.dps.mil'
               '*.sharepoint-mil.us'
-              //'*.wns.windows.com'
-              //'g.live.com'
-              //'oneclient.sfx.ms'
-              //'*.svc.ms'
-              //'az741266.vo.msecnd.net'
-              //'spoprod-a.akamaihd.net'
-              //'static.sharepointonline.com'
+              '*.wns.windows.com'
+              'g.live.com'
+              'oneclient.sfx.ms'
+              '*.svc.ms'
+              'az741266.vo.msecnd.net'
+              'spoprod-a.akamaihd.net'
+              'static.sharepointonline.com'
+
               // Teams
               '*.dod.teams.microsoft.us'
               '*.online.dod.skypeforbusiness.us'
               'dod.teams.microsoft.us'
               'dodteamsapuiwebcontent.blob.core.usgovcloudapi.net'
-              //'msteamsstatics.blob.core.usgovcloudapi.net'
-              //'statics.teams.microsoft.com'
+              'msteamsstatics.blob.core.usgovcloudapi.net'
+              'statics.teams.microsoft.com'
               'endpoint1-proddodcecompsvc-dodc.streaming.media.usgovcloudapi.net'
               'endpoint1-proddodeacompsvc-dode.streaming.media.usgovcloudapi.net'
-              // M365 Common and Office Online
-              // '*.dod.online.office365.us'
-              '*.apps.mil'
-              '*.office365.us'
-              //'*.auth.microsoft.us'
-              //'*.gov.us.microsoftonline.com'
-              'dod-graph.microsoft.us'
-              //'graph.microsoftazure.us'
-              //'login.microsoftonline.us'
-              //'*.msauth.net'
-              //'*.msauthimages.us'
-              //'*.msftauth.net'
-              //'*.msftauthimages.us'
-              //'clientconfig.microsoftonline-p.net'
-              //'graph.windows.net'
-              //'login-us.microsoftonline.com'
-              //'login.microsoftonline-p.com'
-              //'login.microsoftonline.com'
-              //'login.windows.net'
-              // 'loginex.microsoftonline.com'
-              // 'mscrl.microsoft.com'
-              // 'nexus.microsoftonline-p.com'
-              // 'secure.aadcdn.microsoftonline-p.com'
-              // 'portal.apps.mil'
-              // 'reports.apps.mil'
-              'webshell.dodsuite.office365.us'
-              // 'www.ohome.apps.mil'
-              // 'dod.loki.office365.us'
-              // 'activation.sls.microsoft.com'
-              // 'crl.microsoft.com'
-              // 'go.microsoft.com'
-              // 'insertmedia.bing.office.net'
-              // 'ocsa.officeapps.live.com'
-              // 'ocsredir.officeapps.live.com'
-              // 'ocws.officeapps.live.com'
-              // 'office15client.microsoft.com'
-              // 'officecdn.microsoft.com'
-              // 'officecdn.microsoft.com.edgesuite.net'
-              // 'officepreviewredir.microsoft.com'
-              // 'officeredir.microsoft.com'
-              // 'ols.officeapps.live.com'
-              // 'r.office.microsoft.com'
-              // 'cdn.odc.officeapps.live.com'
-              // 'mrodevicemgr.officeapps.live.com'
-              // 'odc.officeapps.live.com'
-              // 'officeclient.microsoft.com'
-              // 'lpcres.delve.office.com'
-              // '*.cdn.office.net'
-              // '*.security.apps.mil'
-              // 'compliance.apps.mil'
-              // 'purview.apps.mil'
-              // 'scc.protection.apps.mil'
-              // 'security.apps.mil'
-              // 'activity.windows.com'
-              'dod.activity.windows.us'
-              'dod-mtis.cortana.ai'
-              // '*.aadrm.us'
-              // '*.informationprotection.azure.us'
-              // 'pf.events.data.microsoft.com'
-              // 'pf.pipe.aria.microsoft.com'
+            ]
+            terminateTLS: false
+            sourceAddresses: avdVirtualNetworkCidrs
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Cert Registrars and CRLs'     //https://learn.microsoft.com/en-us/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure-for-us-government
+            protocols: [
+              {
+                protocolType: 'Http'
+                port: 80
+              }
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              'ocsp.msocsp.com'
+              'pki.goog'
+              'ocsp.entrust.net'
+              '*.digicert.com'
+              'ocsp.sectigo.com'
+              'ocsp.usertrust.com'
+              'crl.comodoca.com'
+            ]
+            terminateTLS: false
+            sourceAddresses: avdVirtualNetworkCidrs
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'aka.ms'     //https://learn.microsoft.com/en-us/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure-for-us-government
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              'aka.ms'
+            ]
+            terminateTLS: false
+            sourceAddresses: avdVirtualNetworkCidrs
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'AVD Management - Azure'     //https://learn.microsoft.com/en-us/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure-for-us-government
+            protocols: [
+              {
+                protocolType: 'Http'
+                port: 80
+              }
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              'management.usgovcloudapi.net'                // Azure Management
+              '*.github.com'                                // GitHub
+              '*.githubusercontent.com'                     // GitHub
+              '*.githubassets.com'                          // GitHub
+              '*.adobe.io'                                  // Image Builds
+              '*.amazonworkspaces.com'
+              'arc.msn.com'
             ]
             terminateTLS: false
             sourceAddresses: avdVirtualNetworkCidrs
@@ -1024,26 +1185,46 @@ resource ruleCollectionGroup_AVD_Outbound 'Microsoft.Network/firewallPolicies/ru
           // }
         ]
       }
-      {
-        name: 'AVD-AdminPool-Outbound'
-        action: {
-          type: 'Allow'
-        }
-        priority: 10200
-        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
-        rules: [
-        ]
-      }
-      {
-        name: 'AVD-DevPool-Outbound'
-        action: {
-          type: 'Allow'
-        }
-        priority: 10200
-        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
-        rules: [
-        ]
-      }
+      // {
+      //   name: 'Net-AVD-AdminPool'
+      //   action: {
+      //     type: 'Allow'
+      //   }
+      //   priority: 10300
+      //   ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+      //   rules: [
+      //   ]
+      // }
+      // {
+      //   name: 'App-AVD-AdminPool'
+      //   action: {
+      //     type: 'Allow'
+      //   }
+      //   priority: 10400
+      //   ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+      //   rules: [
+      //   ]
+      // }
+      // {
+      //   name: 'Net-AVD-DevPool'
+      //   action: {
+      //     type: 'Allow'
+      //   }
+      //   priority: 10500
+      //   ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+      //   rules: [
+      //   ]
+      // }
+      // {
+      //   name: 'App-AVD-DevPool'
+      //   action: {
+      //     type: 'Allow'
+      //   }
+      //   priority: 10600
+      //   ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+      //   rules: [
+      //   ]
+      // }
     ]
   }
 }

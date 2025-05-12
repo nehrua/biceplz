@@ -5,7 +5,10 @@ param addressSpacePrefixes array = [
   '10.0.0.0/16'
 ]
 param dnsServers array = []
-param gatewaySubnetPrefix string = '10.0.0.0/24'
+param gatewaySubnetPrefixes array = [
+  '10.0.0.0/24'
+  '2001:db8:abcd:0010::/64'
+  ]
 param firewallSubnetPrefix string = '10.1.0.0/24'
 param bastionSubnetPrefix string = '10.2.0.0/24'
 param resolverInboundSubnetPrefix string = '10.3.0.0/28'
@@ -133,7 +136,7 @@ var subnets = union([
     {
       name: 'GatewaySubnet'
       properties: {
-        addressPrefix: gatewaySubnetPrefix
+        addressPrefixes: gatewaySubnetPrefixes
       }
     }
   ], 
@@ -221,6 +224,7 @@ module routeTable 'route-table.bicep' = {
   name: 'deploy-${virtualNetworkName}-routetable-${deploymentNameSuffix}'
   params: {
     name: '${virtualNetworkName}-quadz-rt'
+    nextHopIpAddress: firewall.outputs.privateIpAddress
   }
 }
 
@@ -245,7 +249,8 @@ module firewall 'firewall.bicep' = if (deployAzureFirewall) {
     firewallSkuTier: 'Premium'
     azureFirewallSubnetId: virtualNetwork.outputs.hubSubnets[1].id
     firewallPolicySku: 'Premium'
-    avdSubnetAddresses: avdSubnetCidrs
+    avdVirtualNetworkCidrs: avdSubnetCidrs
+    dnsResolverInboundIp: dnsresolver.outputs.inboundEndpointIp
   }
 }
 
@@ -291,3 +296,4 @@ output bastionNsgName string = bastionNsg.outputs.name
 output bastionNsgId string = bastionNsg.outputs.id
 output routeTableId string = routeTable.outputs.id
 output natGatewayId string = natGateway.outputs.id
+output resolverInboundEndpointIP string = dnsresolver.outputs.inboundEndpointIp

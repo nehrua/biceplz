@@ -61,7 +61,7 @@ resource spokeVirtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = if
     subnets: [for subnet in spokeSubnets: {
       name: subnet.name
       properties: {
-        addressPrefix: subnet.addressPrefix
+        addressPrefixes: subnet.addressPrefixes
         networkSecurityGroup: {
           id: networkSecurityGroupId
         }
